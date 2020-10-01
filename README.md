@@ -1,4 +1,4 @@
-# Anonymized HMM Repo
+# HMMs for Language Modeling (Pytorch version)
 
 ## Dependencies
 * (TVM)[https://tvm.apache.org/docs/install/from_source.html#developers-get-source-from-github]. This has a dependency on LLVM.
