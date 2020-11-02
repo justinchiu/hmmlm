@@ -18,16 +18,14 @@ from torch.utils.checkpoint import checkpoint
 
 import torch_struct as ts
 
-from .misc import ResidualLayerOld, ResidualLayerOpt, LogDropout
-#from .stateemb import StateEmbedding
-from .stateemb import StateEmbedding2 as StateEmbedding
+from .misc import ResidualLayer, LogDropout
+from .stateemb import StateEmbedding
 
 from utils import Pack
 from assign import read_lm_clusters, assign_states_brown_cluster
 
+
 class FactoredHmmLm(nn.Module):
-    """ Has both charcnn and factored state embs
-    """
     def __init__(self, V, config):
         super(FactoredHmmLm, self).__init__()
 
@@ -45,8 +43,6 @@ class FactoredHmmLm(nn.Module):
         self.states_per_word_d = config.train_spw
 
         self.num_layers = config.num_layers
-
-        ResidualLayer = ResidualLayerOld
 
         self.timing = config.timing > 0
         self.chp_theta = config.chp_theta > 0
@@ -215,26 +211,10 @@ class FactoredHmmLm(nn.Module):
         self.register_buffer("zero", th.zeros(1))
         self.register_buffer("one", th.ones(1))
 
-        self.word_dropout = config.word_dropout
-        if self.word_dropout > 0:
-            with th.no_grad():
-                self.uniform_emission = self.get_uniform_emission(
-                    self.word2state.to(self.device),
-                )
-
-    def get_uniform_emission(self, word2state):
-        a = self.a
-        v = self.v
-
-        i = th.stack([word2state.view(-1), a])
-        sparse = th.sparse.FloatTensor(i, v, th.Size([self.C, len(self.V)]))
-        return sparse.to_dense().log().log_softmax(-1)
 
     def init_state(self, bsz):
         return self.start.unsqueeze(0).expand(bsz, self.C)
 
-    # don't permute here, permute before passing into torch struct stuff
-    #@profile
     def start(self, states=None):
         start_emb = self.start_emb(states)
         return self.start_mlp(self.dropout(start_emb)).squeeze(-1).log_softmax(-1)
@@ -249,18 +229,13 @@ class FactoredHmmLm(nn.Module):
             start_emb
         )
 
-    #@profile
     def transition_logits(self, states=None):
         state_emb = self.state_emb(states)
         next_state_emb = self.next_state_emb(states)
         x = self.trans_mlp(self.dropout(state_emb))
         return x @ next_state_emb.t()
 
-    #@profile
     def mask_transition(self, logits):
-        # only in the weird case previously?
-        # although now we may have unassigned states, oh well
-        #logits[:,-1] = float("-inf")
         return logits.log_softmax(-1)
 
     def transition_chp(self, states=None):
@@ -271,29 +246,21 @@ class FactoredHmmLm(nn.Module):
             state_emb, next_state_proj,
         )
 
-    #@profile
     def emission_logits(self, states=None):
         preterminal_emb = self.preterminal_emb(states)
         h = self.terminal_mlp(self.dropout(preterminal_emb))
         logits = self.terminal_proj(h)
         return logits
 
-    #@profile
     def mask_emission(self, logits, word2state):
         a = self.ad if self.training else self.a
         v = self.vd if self.training else self.v
-        #a = self.ad
-        #v = self.vd
 
         i = th.stack([word2state.view(-1), a])
         C = logits.shape[0]
         sparse = th.sparse.ByteTensor(i, v, th.Size([C, len(self.V)]))
         mask = sparse.to_dense().bool().to(logits.device)
-        #if wandb.run.mode == "dryrun":
-            #import pdb; pdb.set_trace()
         log_probs = logits.masked_fill_(~mask, float("-inf")).log_softmax(-1)
-        #log_probs.register_hook(make_f("emission log probs"))
-        #log_probs[log_probs != log_probs] = float("-inf")
         return log_probs
 
     def emission_chp(self, word2state, states=None):
@@ -309,22 +276,9 @@ class FactoredHmmLm(nn.Module):
             preterminal_emb
         )
 
-    def forward(self, inputs, state=None):
-        # forall x, p(X = x)
-        emission_logits = self.emission_logits
-        word2state = self.word2state
-        transition = self.mask_transition(self.transition_logits)
-        emission = self.mask_emission(emission_logits, word2state)
-        clamped_states = word2state[text]
 
-        import pdb; pdb.set_trace()
-        lpx = None
-        return lpx
-
-    #@profile
     def clamp(
         self, text, start, transition, emission, word2state,
-        uniform_emission = None, word_mask = None,
         reset = None,
     ):
         clamped_states = word2state[text]
@@ -339,10 +293,7 @@ class FactoredHmmLm(nn.Module):
             # reset words following eos
             reset_states = word2state[text[:,1:][eos_mask]]
             log_potentials[eos_mask] = reset[reset_states][:,None]
-            #lp = log_potentials.clone()
         
-        # this gets messed up if it's the same thing multiple times?
-        # need to mask.
         b_idx = th.arange(batch, device=self.device)
         init = (
             start[clamped_states[:,0]]
@@ -351,17 +302,10 @@ class FactoredHmmLm(nn.Module):
         )
 
         obs = emission[clamped_states[:,:,:,None], text[:,:,None,None]]
-        # word dropout == replace with uniform emission matrix (within cluster)?
-        # precompute that and sample mask
-        if uniform_emission is not None and word_mask is not None:
-            unif_obs = uniform_emission[clamped_states[:,:,:,None], text[:,:,None,None]]
-            obs[word_mask] = unif_obs[word_mask]
+
         log_potentials[:,0] += init.unsqueeze(-1)
         log_potentials += obs[:,1:].transpose(-1, -2)
         log_potentials[:,0] += obs[:,0]
-        #if wandb.run.mode == "dryrun":
-            #print(f"total clamp time: {timep.time() - start_clamp}")
-        #import pdb; pdb.set_trace()
         return log_potentials.transpose(-1, -2)
 
     def trans_to(self, from_states, to_states):
@@ -370,16 +314,12 @@ class FactoredHmmLm(nn.Module):
         x = self.trans_mlp(self.dropout(state_emb))
         return (x @ next_state_proj.t()).log_softmax(-1)
 
-    #@profile
     def compute_parameters(self, word2state,
         states=None, word_mask=None,
         lpz=None, last_states=None,
     ):
         if self.chp_theta:
             transition = self.transition_chp(states)
-            #emission = self.emission_chp(word2state, states)
-            #start = self.start_chp(states)
-            #return start, transition, emission
         else:
             transition = self.mask_transition(self.transition_logits(states))
 
@@ -390,7 +330,6 @@ class FactoredHmmLm(nn.Module):
             start = (
                 lpz[:,:,None] + self.trans_to(last_states, states)
             ).logsumexp(1)
-            # hope this isn't too big
              
         emission = self.mask_emission(self.emission_logits(states), word2state)
         return start, transition, emission
@@ -401,7 +340,6 @@ class FactoredHmmLm(nn.Module):
         lpz=None, last_states=None,
         word_mask=None,
     ):
-        #word2state = self.word2state
         word2state = self.word2state_d if states is not None else self.word2state
 
         start, transition, emission = self.compute_parameters(
@@ -409,23 +347,11 @@ class FactoredHmmLm(nn.Module):
             word_mask,
             lpz, last_states,
         )
-        # really should put this in compute_parameters
+        # reset hidden state at EOS
         reset = self.start(states) if self.reset_eos else None
-        #if wandb.run.mode == "dryrun":
-            #print(f"total emitm time: {timep.time() - start_emitm}")
-            #start_clamp = timep.time()
-        if word_mask is not None:
-            uniform_emission = (self.uniform_emission[states]
-                if states is not None else self.uniform_emission)
-        else:
-            uniform_emission = None
-        #print("Preclamp")
-        #print(checkmem())
-        #print("clamp")
-        #
+
         return self.clamp(
             text, start, transition, emission, word2state,
-            uniform_emission, word_mask,
             reset = reset,
         )
 
@@ -449,7 +375,6 @@ class FactoredHmmLm(nn.Module):
             loss = elbo,
         ), alpha_T.log_softmax(-1)
 
-    #@profile
     def score(
         self, text,
         lpz=None, last_states=None,
@@ -464,22 +389,14 @@ class FactoredHmmLm(nn.Module):
                 .indices
             )
             states = self.cluster2state.gather(1, I).view(-1)
-
-            # word dropout. Kills (uniform) if mask == 1
-            # TODO: factor this out into args (also need to factor out dropout prob lol)
-            word_mask = th.empty(
-                text.shape, dtype=th.float, device=self.device
-            ).bernoulli_(0.1).bool() if self.word_dropout > 0 else None
         else:
             states = None
-            word_mask = None
         if self.timing:
             startpot = timep.time()
         log_potentials = self.log_potentials(
             text,
             states,
             lpz, last_states,
-            word_mask,
         )
         if self.timing:
             print(f"log pot: {timep.time() - startpot}")
@@ -500,36 +417,4 @@ class FactoredHmmLm(nn.Module):
             evidence = evidence,
             loss = elbo,
         ), alpha_T.log_softmax(-1), end_states
-
-    def scoren(self, text, mask=None, lengths=None):
-        raise NotImplementedError()
-        N, T = text.shape
-        #if wandb.run.mode == "dryrun":
-            #start_pot = timep.time()
-        # sample states if training
-        if self.training:
-            I = (th.distributions.Gumbel(self.zero, self.one)
-                .sample(self.cluster2state.shape)
-                .squeeze(-1)
-                .topk(self.states_per_word // 2, dim=-1)
-                .indices
-            )
-            states = self.cluster2state.gather(1, I).view(-1)
-        else:
-            states = None
-
-        log_potentials = self.log_potentials(text, states)
-        #if wandb.run.mode == "dryrun":
-            #print(f"total pot time: {timep.time() - start_pot}")
-            #start_marg = timep.time()
-        fb = self.fb_train if self.training else self.fb_test
-        #marginals, alphas, betas, log_m = fb(log_potentials, mask=mask)
-        log_m, alphas = fb(log_potentials, mask=mask)
-        evidence = alphas[lengths-1, th.arange(N)].logsumexp(-1)
-        elbo = (log_m.exp_() * log_potentials)[mask[:,1:]]
-        return Pack(
-            elbo = elbo,
-            evidence = evidence,
-            loss = elbo,
-        )
 

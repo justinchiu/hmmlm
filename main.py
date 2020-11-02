@@ -19,7 +19,6 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau, LambdaLR
 import torchtext
 from datasets.lm import PennTreebank, WikiText2, Wsj
 from datasets.data import BucketIterator, BPTTIterator
-#from torchtext.data import BPTTIterator
 
 from args import get_args
 
@@ -28,8 +27,6 @@ from utils import Pack
 from utils import plot_counts
 
 import wandb
-
-#th.autograd.set_detect_anomaly(True)
 
 valid_schedules = ["reducelronplateau"]
 
@@ -46,7 +43,6 @@ def update_best_valid(
     global PREV_SAVE
     if valid_losses.evidence > BEST_VALID:
         # do not save on dryruns
-        #if wandb.run.mode == "run":
         if not wandb.run._settings._offline:
             save_f = f"wandb_checkpoints/{name}/{WANDB_STEP}_{-valid_losses.evidence / valid_n:.2f}.pth"
             print(f"Saving model to {save_f}")
@@ -69,8 +65,6 @@ def update_best_valid(
 def report(losses, n, prefix, start_time=None):
     loss = losses.evidence
     elbo = losses.elbo
-    # cap loss otherwise overflow
-    #loss = loss if loss > -1e7 else -1e7
     str_list = [
         f"{prefix}: log_prob = {loss:.2f}",
         f"xent(word) = {-loss / n:.2f}",
@@ -185,8 +179,6 @@ def mixed_cached_eval_loop(
             y = (x @ next_state_proj.t()).log_softmax(-1)
             transition[states] = y.to(transition.device)
 
-        #start0, transition0, emission0 = model.compute_parameters(model.word2state)
-        # th.allclose(transition, transition0)
         word2state = model.word2state
         for i, batch in enumerate(iter):
             if hasattr(model, "noise_scale"):
@@ -226,9 +218,8 @@ def elbo_eval_loop(
     n = 0
     with th.no_grad():
         for i, batch in enumerate(iter):
-            # TODO: HACK, add an option to not train with dropout
+            # TODO: HACK, add an option to eval with dropout
             model.train(True)
-            #model.train(False)
             if hasattr(model, "noise_scale"):
                 model.noise_scale = 0
             mask, lengths, n_tokens = get_mask_lengths(batch.text, V)
@@ -267,7 +258,6 @@ def train_loop(
             if args.iterator == "bucket":
                 lpz = None
                 last_states = None
-            #print(" ".join([model.V.itos[x] for x in text[0].tolist()]))
 
             # set noise scale
             if hasattr(model, "noise_scale"):
@@ -302,11 +292,8 @@ def train_loop(
                 print(f"backward time: {timep.time() - start_backward}")
             clip_grad_norm_(parameters, args.clip)
             if args.schedule not in valid_schedules:
-                # sched before opt since we want step = 1?
-                # this is how huggingface does it
                 scheduler.step()
             optimizer.step()
-            #import pdb; pdb.set_trace()
             wandb.log({
                 "running_training_loss": total_ll / n,
                 "running_training_ppl": math.exp(min(-total_ll / n, 700)),
@@ -321,9 +308,6 @@ def train_loop(
 
             if valid_iter is not None and i % checkpoint == checkpoint-1:
                 v_start_time = time.time()
-                #eval_fn = cached_eval_loop if args.model == "mshmm" else eval_loop
-                #valid_losses, valid_n  = eval_loop(
-                #valid_losses, valid_n  = cached_eval_loop(
                 if args.model == "mshmm" or args.model == "factoredhmm":
                     if args.num_classes > 2 ** 15:
                         eval_fn = mixed_cached_eval_loop
@@ -350,24 +334,14 @@ def train_loop(
                 }, step=WANDB_STEP)
                 scheduler.step(valid_losses.evidence)
 
-                # remove this later?
                 if args.log_counts > 0 and args.keep_counts > 0:
-                    # TODO: FACTOR OUT
                     counts = (model.counts / model.counts.sum(0, keepdim=True))[:,4:]
                     c, v = counts.shape
-                    #cg4 = counts > 1e-4
-                    #cg3 = counts > 1e-3
                     cg2 = counts > 1e-2
 
                     wandb.log({
-                        #"avgcounts@1e-4": cg4.sum().item() / float(v),
-                        #"avgcounts@1e-3": cg3.sum().item() / float(v),
                         "avgcounts@1e-2": cg2.sum().item() / float(v),
-                        #"maxcounts@1e-4": cg4.sum(0).max().item() / float(v),
-                        #"maxcounts@1e-3": cg3.sum(0).max().item() / float(v),
                         "maxcounts@1e-2": cg2.sum(0).max().item(),
-                        #"mincounts@1e-4": cg4.sum(0).min().item() / float(v),
-                        #"mincounts@1e-3": cg3.sum(0).min().item() / float(v),
                         "mincounts@1e-2": cg2.sum(0).min().item(),
                         "maxcounts": counts.sum(0).max().item(),
                         "mincounts": counts.sum(0).min().item(),
@@ -506,7 +480,6 @@ def main():
     else:
         raise ValueError("Invalid schedule options")
 
-    # training loop, factor out later if necessary
     for e in range(args.num_epochs):
         start_time = time.time()
         if args.log_counts > 0 and args.keep_counts > 0:
@@ -521,7 +494,6 @@ def main():
         total_time = report(train_losses, train_n, f"Train epoch {e}", start_time)
 
         v_start_time = time.time()
-        #eval_fn = cached_eval_loop if args.model == "mshmm" else eval_loop
         if args.model == "mshmm" or args.model == "factoredhmm":
             if args.num_classes > 2 ** 15:
                 eval_fn = mixed_cached_eval_loop
@@ -553,12 +525,8 @@ def main():
         }, step=WANDB_STEP)
 
         if args.log_counts > 0 and args.keep_counts > 0:
-            # TODO: FACTOR OUT
-            # only look at word tokens
             counts = (model.counts / model.counts.sum(0, keepdim=True))[:,4:]
             c, v = counts.shape
-            #cg4 = counts > 1e-4
-            #cg3 = counts > 1e-3
             cg2 = counts > 1e-2
 
             # state counts
@@ -571,14 +539,8 @@ def main():
             sc5 = (model.state_counts >= 5).sum()
 
             wandb.log({
-                #"avgcounts@1e-4": cg4.sum().item() / float(v),
-                #"avgcounts@1e-3": cg3.sum().item() / float(v),
                 "avgcounts@1e-2": cg2.sum().item() / float(v),
-                #"maxcounts@1e-4": cg4.sum(0).max().item() / float(v),
-                #"maxcounts@1e-3": cg3.sum(0).max().item() / float(v),
                 "maxcounts@1e-2": cg2.sum(0).max().item(),
-                #"mincounts@1e-4": cg4.sum(0).min().item() / float(v),
-                #"mincounts@1e-3": cg3.sum(0).min().item() / float(v),
                 "mincounts@1e-2": cg2.sum(0).min().item(),
                 "maxcounts": counts.sum(0).max().item(),
                 "mincounts": counts.sum(0).min().item(),
