@@ -1,10 +1,10 @@
 # HMMs for Language Modeling (Pytorch version)
 
 ## Dependencies
-* [TVM](https://tvm.apache.org/docs/install/from_source.html#developers-get-source-from-github). This has a dependency on LLVM.
+* [TVM](https://tvm.apache.org/docs/install/from_source.html#developers-get-source-from-github) 0.7.dev1. This has a dependency on LLVM.
 * Pytorch 1.5
 * Torchtext 0.6.0
-* Wandb
+* Wandb 0.10.1
 
 ### Brown Clusters
 Clone the Brown Cluster repo from
@@ -16,7 +16,12 @@ Preprocess the data by flattening the data , which is only used for producing Br
 python scripts/preprocess_dataset.py
 ```
 
-Run the Brown Cluster script to obtain clusters.
+Export the `l_cluster` to the path of the `brown-cluster/wcluster` command.
+```
+export l_cluster=/path/to/brown-cluster/wcluster
+```
+
+Run the Brown Cluster script to obtain clusters for PTB and WikiText-2.
 ```
 bash scripts/brown_cluster.sh lm128
 bash scripts/brown_cluster.sh w2flm128
