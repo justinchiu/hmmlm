@@ -210,28 +210,6 @@ def mixed_cached_eval_loop(
             n += n_tokens
     return Pack(evidence = total_ll, elbo = total_elbo), n
 
-def elbo_eval_loop(
-    args, V, iter, model, m,
-):
-    total_ll = 0
-    total_elbo = 0
-    n = 0
-    with th.no_grad():
-        for i, batch in enumerate(iter):
-            # TODO: HACK, add an option to eval with dropout
-            model.train(True)
-            if hasattr(model, "noise_scale"):
-                model.noise_scale = 0
-            mask, lengths, n_tokens = get_mask_lengths(batch.text, V)
-            evidence = []
-            for _ in range(m):
-                losses = model.scoren(batch.text, mask=mask, lengths=lengths)
-                evidence.append(losses.evidence)
-            evidence = th.stack(evidence).logsumexp(0) - math.log(m)
-            total_ll += evidence.sum()
-            n += n_tokens
-    return Pack(evidence = total_ll, elbo = total_elbo), n
-
 def train_loop(
     args, V, iter, model,
     parameters, optimizer, scheduler,
