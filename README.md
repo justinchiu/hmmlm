@@ -9,7 +9,7 @@ which trains HMMs with large state spaces for language modeling.
 * Torchtext 0.6.0
 * Wandb 0.10.1
 
-### Brown Clusters
+## Brown Clusters
 The HMMs in this repository rely on Brown Clusters.
 To obtain the clusters for running the HMMs, follow these instructions:
 
@@ -35,18 +35,19 @@ bash scripts/brown_cluster.sh lm128
 bash scripts/brown_cluster.sh w2flm128
 ```
 
-### Very Large HMM (VL-HMM)
+## Very Large HMM (VL-HMM)
 
+### Penn Treebank
 To train a 32k state HMM on PTB, run
 ```
 source scripts/hmm_commands.sh && run_ptb
 ```
 An example run can be found [here](https://wandb.ai/justinchiu/hmm-lm/runs/1bkzvixn/logs).
 
+### WikiText-2
 To train a 32k state HMM on WikiText-2, run
 ```
 source scripts/hmm_commands.sh && run_w2
 ```
 An example run can be found [here](https://wandb.ai/justinchiu/hmm-lm/runs/1ciz3kxf/logs).
-
 
