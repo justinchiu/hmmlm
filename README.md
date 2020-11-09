@@ -33,10 +33,12 @@ To train a 32k state HMM on PTB, run
 ```
 source scripts/hmm_commands.sh && run_ptb
 ```
+An example run can be found [here](https://wandb.ai/justinchiu/hmm-lm/runs/1bkzvixn/logs).
 
 To train a 32k state HMM on WikiText-2, run
 ```
 source scripts/hmm_commands.sh && run_w2
 ```
+An example run can be found [here](https://wandb.ai/justinchiu/hmm-lm/runs/1ciz3kxf/logs).
 
 
