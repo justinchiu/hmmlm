@@ -10,6 +10,9 @@ which trains HMMs with large state spaces for language modeling.
 * Wandb 0.10.1
 
 ### Brown Clusters
+The HMMs in this repository rely on Brown Clusters.
+To obtain the clusters for running the HMMs, follow these instructions:
+
 1. Clone the Brown Cluster repo from
 [github.com/percyliang/brown-cluster](https://github.com/percyliang/brown-cluster)
 and install it locally following the directions in the repo.
