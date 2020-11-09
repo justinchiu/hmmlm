@@ -18,7 +18,7 @@ To obtain the clusters for running the HMMs, follow these instructions:
 and install it locally following the directions in the repo.
 
 2. Export `l_cluster` to the path of the `brown-cluster/wcluster` command,
-locally installed in the previous step.
+installed in the previous step.
 ```
 export l_cluster=/path/to/brown-cluster/wcluster
 ```
