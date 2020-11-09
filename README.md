@@ -1,6 +1,10 @@
 # HMMs for Language Modeling
 
-Code for the paper [Scaling Hidden Markov Language Models](),
+Code for the paper
+[Scaling Hidden Markov Language Models](),
+Justin T. Chiu and Alexander Rush
+EMNLP 2020
+
 which trains HMMs with large state spaces for language modeling.
 
 ## Dependencies
@@ -11,7 +15,8 @@ which trains HMMs with large state spaces for language modeling.
 
 ## Brown Clusters
 The HMMs in this repository rely on Brown Clusters.
-To obtain the clusters for running the HMMs, follow these instructions:
+We include the Brown Clusters necessary for runnings the HMMs in the `clusters` directory.
+To rebuild the clusters, follow these instructions:
 
 1. Clone the Brown Cluster repo from
 [github.com/percyliang/brown-cluster](https://github.com/percyliang/brown-cluster)
