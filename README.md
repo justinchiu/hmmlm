@@ -1,4 +1,7 @@
-# HMMs for Language Modeling (Pytorch version)
+# HMMs for Language Modeling
+
+Code for the paper [Scaling Hidden Markov Language Models](),
+which trains HMMs with large state spaces for language modeling.
 
 ## Dependencies
 * [TVM](https://tvm.apache.org/docs/install/from_source.html#developers-get-source-from-github) 0.7.dev1. This has a dependency on LLVM.
@@ -7,21 +10,23 @@
 * Wandb 0.10.1
 
 ### Brown Clusters
-Clone the Brown Cluster repo from
+1. Clone the Brown Cluster repo from
 [github.com/percyliang/brown-cluster](https://github.com/percyliang/brown-cluster)
-and install it via `make`.
+and install it locally following the directions in the repo.
 
-Preprocess the data by flattening the data , which is only used for producing Brown Clusters.
-```
-python scripts/preprocess_dataset.py
-```
-
-Export the `l_cluster` to the path of the `brown-cluster/wcluster` command.
+2. Export `l_cluster` to the path of the `brown-cluster/wcluster` command,
+locally installed in the previous step.
 ```
 export l_cluster=/path/to/brown-cluster/wcluster
 ```
 
-Run the Brown Cluster script to obtain clusters for PTB and WikiText-2.
+3. Preprocess the data by flattening the data.
+The flattened data is only used for producing the Brown Clusters.
+```
+python scripts/preprocess_dataset.py
+```
+
+4. Run the Brown Cluster script to obtain clusters for PTB and WikiText-2.
 ```
 bash scripts/brown_cluster.sh lm128
 bash scripts/brown_cluster.sh w2flm128
